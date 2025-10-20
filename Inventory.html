@@ -763,7 +763,6 @@
         const selectAllCheckbox = document.getElementById('select-all-checkbox');
 
         // --- DATA INITIALIZATION ---
-        // --- MODIFIED: Removed seeding for 'districts' and 'supervisors' ---
         function initializeData() {
             // This function now only seeds sample inventory if it's missing.
             // User and district data is now ONLY seeded by login.html
@@ -793,7 +792,6 @@
 
         function loadData() {
             try {
-                // We no longer call getSampleData() here, as login.html is the source of truth
                 inventory = JSON.parse(localStorage.getItem('inventoryData')) || []; 
                 movementLogs = JSON.parse(localStorage.getItem('movementLogs')) || [];
 
@@ -823,8 +821,6 @@
             localStorage.setItem('movementLogs', JSON.stringify(movementLogs));
             window.dispatchEvent(new Event('storage'));
         }
-
-        // --- REMOVED getSampleData() function as it's no longer needed here ---
 
         function generateId(type) {
             let prefix = (type || 'GEN').substring(0, 3).toUpperCase();
@@ -917,17 +913,13 @@
         }
         
         function updateStats() {
-            // Calculate stats based on the full inventory list
             const totalItems = inventory.length;
             const availableItems = inventory.filter(i => i.status === 'available').length;
             const inUseItems = inventory.filter(i => i.status === 'in-use').length;
             const maintenanceItems = inventory.filter(i => i.status === 'maintenance').length;
             const retiredItems = inventory.filter(i => i.status === 'retired').length;
 
-            // Update the total items card to reflect the entire inventory
             document.getElementById('total-items').textContent = totalItems;
-            
-            // Update other stat cards as before
             document.getElementById('available-items').textContent = availableItems;
             document.getElementById('in-use-items').textContent = inUseItems;
             document.getElementById('maintenance-items').textContent = maintenanceItems;
@@ -938,16 +930,11 @@
             const types = ['tablet', 'phone', 'charger', 'bag', 'power-bank'];
             
             types.forEach(type => {
-                // Use the full inventory for calculations
                 const total = inventory.filter(i => i.type === type).length;
                 const available = inventory.filter(i => i.type === type && i.status === 'available').length;
                 
-                // *** BUG FIX: Changed from type.replace() to just 'type' ***
-                const typeId = type; 
-                
-                // Check if elements exist before trying to set textContent
-                const totalEl = document.getElementById(`${typeId}-total`);
-                const availableEl = document.getElementById(`${typeId}-available`);
+                const totalEl = document.getElementById(`${type}-total`);
+                const availableEl = document.getElementById(`${type}-available`);
 
                 if (totalEl) totalEl.textContent = total;
                 if (availableEl) availableEl.textContent = available;
@@ -965,7 +952,7 @@
             const filtered = inventory.filter(item => {
                 const searchMatch = Object.values(item).some(val => String(val).toLowerCase().includes(searchTerm));
                 const typeMatch = !filterType || item.type === filterType;
-                const statusMatch = !filterStatus || item.status === filterStatus;
+                const statusMatch = !filterStatus || item.status === statusMatch;
                 
                 const itemDistrict = item.district || "N/A";
                 const districtMatch = !filterDistrict || itemDistrict === filterDistrict;
@@ -981,15 +968,13 @@
             const statusFilter = document.getElementById('filter-status');
             const districtFilter = document.getElementById('filter-district');
 
-            // Save current values
             const currentType = typeFilter.value;
             const currentStatus = statusFilter.value;
             const currentDistrict = districtFilter.value;
 
-            // Clear old options
-            typeFilter.options.length = 1; // Keep "All Types"
-            statusFilter.options.length = 1; // Keep "All Statuses"
-            districtFilter.options.length = 1; // Keep "All Districts"
+            typeFilter.options.length = 1; 
+            statusFilter.options.length = 1;
+            districtFilter.options.length = 1;
 
             const types = [...new Set(inventory.map(item => item.type))].sort();
             const statuses = [...new Set(inventory.map(item => item.status))].sort();
@@ -1005,7 +990,6 @@
                 districtFilter.add(new Option(district, district));
             });
 
-            // Restore values
             typeFilter.value = currentType;
             statusFilter.value = currentStatus;
             districtFilter.value = currentDistrict;
@@ -1059,7 +1043,6 @@
             document.getElementById('new-item-btn').addEventListener('click', () => openModal('item-modal'));
             document.getElementById('bulk-upload-btn').addEventListener('click', () => openModal('bulk-upload-modal'));
             
-            // --- ADDED FILTER LISTENERS ---
             searchBox.addEventListener('keyup', filterInventory);
             document.getElementById('filter-type').addEventListener('change', filterInventory);
             document.getElementById('filter-status').addEventListener('change', filterInventory);
@@ -1275,7 +1258,6 @@
                 const existingIds = new Set(inventory.map(item => item.id));
 
                 parsedUploadData.forEach(row => {
-                    // Find keys in a case-insensitive way
                     let nameKey, typeKey, idKey, statusKey, assignedKey, districtKey, notesKey;
                     for (const key in row) {
                         const lowerKey = key.toLowerCase();
@@ -1291,7 +1273,6 @@
                     const itemName = row[nameKey];
                     const itemType = row[typeKey];
 
-                    // Basic validation: name and type are required
                     if (!itemName || !itemType) {
                         skippedCount++;
                         return;
@@ -1302,7 +1283,7 @@
                     const newItem = {
                         id: (itemId && !existingIds.has(String(itemId))) ? String(itemId) : generateId(itemType),
                         name: itemName,
-                        type: String(itemType).toLowerCase(),
+                        type: String(itemType).toLowerCase().replace(/\s+/g, '-'),
                         status: row[statusKey] || 'available',
                         assigned: row[assignedKey] || '',
                         district: row[districtKey] || 'mbarara',
@@ -1310,8 +1291,8 @@
                         lastUpdate: new Date().toLocaleDateString()
                     };
                     
-                    inventory.unshift(newItem); // Add to the beginning of the array
-                    existingIds.add(newItem.id); // Add new ID to set to prevent duplicates within the same upload
+                    inventory.unshift(newItem);
+                    existingIds.add(newItem.id);
                     addedCount++;
                 });
 
@@ -1319,7 +1300,6 @@
                 saveData();
                 showNotification(`Successfully added ${addedCount} new items. Skipped ${skippedCount}.`);
                 
-                // Reset upload modal
                 fileUploadInput.value = '';
                 uploadPreview.style.display = 'none';
                 uploadPreview.innerHTML = '';
@@ -1346,17 +1326,17 @@
         }
         
         function updateAllViews() {
-            populateTableFilters(); // Re-populate filters
-            filterInventory(); // Then filter the view
+            populateTableFilters();
+            filterInventory();
             updateStats();
             updateTypeStats();
             updateBulkDeleteButton();
         }
 
         function initApp() {
-            initializeData(); // Ensure sample inventory is available
-            loadData(); // Load all data
-            populateDropdowns(); // Populate dropdowns with user/district data (from login seeder)
+            initializeData();
+            loadData();
+            populateDropdowns();
             setupEventListeners();
             updateAllViews();
         }
