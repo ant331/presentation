@@ -275,10 +275,18 @@
             font-weight: 600;
             font-size: 0.9rem;
             border-bottom: 2px solid var(--border);
+            vertical-align: top;
         }
         
         .inventory-table thead th input[type="checkbox"] {
             cursor: pointer;
+        }
+        
+        .inventory-table thead th select {
+            padding: 0.25rem; 
+            font-size: 0.8rem; 
+            margin-top: 4px; 
+            min-width: 100px;
         }
 
         .inventory-table tbody tr {
@@ -608,10 +616,19 @@
                             <th><input type="checkbox" id="select-all-checkbox"></th>
                             <th>ID</th>
                             <th>Name</th>
-                            <th>Type</th>
-                            <th>Status</th>
+                            <th>
+                                <div>Type</div>
+                                <select id="filter-type" class="form-control"><option value="">All Types</option></select>
+                            </th>
+                            <th>
+                                <div>Status</div>
+                                <select id="filter-status" class="form-control"><option value="">All Statuses</option></select>
+                            </th>
                             <th>Assigned To</th>
-                            <th>District</th>
+                            <th>
+                                <div>District</div>
+                                <select id="filter-district" class="form-control"><option value="">All Districts</option></select>
+                            </th>
                             <th>Last Update</th>
                             <th>Actions</th>
                         </tr>
@@ -924,22 +941,76 @@
                 // Use the full inventory for calculations
                 const total = inventory.filter(i => i.type === type).length;
                 const available = inventory.filter(i => i.type === type && i.status === 'available').length;
-                const typeId = type.replace('-', ''); // for power-bank
-                document.getElementById(`${typeId}-total`).textContent = total;
-                document.getElementById(`${typeId}-available`).textContent = available;
+                
+                // *** BUG FIX: Changed from type.replace() to just 'type' ***
+                const typeId = type; 
+                
+                // Check if elements exist before trying to set textContent
+                const totalEl = document.getElementById(`${typeId}-total`);
+                const availableEl = document.getElementById(`${typeId}-available`);
+
+                if (totalEl) totalEl.textContent = total;
+                if (availableEl) availableEl.textContent = available;
             });
         }
 
         function filterInventory() {
             const searchTerm = searchBox.value.toLowerCase();
-            if (searchTerm) selectedItems.clear();
-            const filtered = inventory.filter(item => 
-                Object.values(item).some(val => String(val).toLowerCase().includes(searchTerm))
-            );
+            const filterType = document.getElementById('filter-type').value;
+            const filterStatus = document.getElementById('filter-status').value;
+            const filterDistrict = document.getElementById('filter-district').value;
+
+            if (searchTerm || filterType || filterStatus || filterDistrict) selectedItems.clear();
+
+            const filtered = inventory.filter(item => {
+                const searchMatch = Object.values(item).some(val => String(val).toLowerCase().includes(searchTerm));
+                const typeMatch = !filterType || item.type === filterType;
+                const statusMatch = !filterStatus || item.status === filterStatus;
+                
+                const itemDistrict = item.district || "N/A";
+                const districtMatch = !filterDistrict || itemDistrict === filterDistrict;
+
+                return searchMatch && typeMatch && statusMatch && districtMatch;
+            });
             renderInventory(filtered);
             updateBulkDeleteButton();
         }
         
+        function populateTableFilters() {
+            const typeFilter = document.getElementById('filter-type');
+            const statusFilter = document.getElementById('filter-status');
+            const districtFilter = document.getElementById('filter-district');
+
+            // Save current values
+            const currentType = typeFilter.value;
+            const currentStatus = statusFilter.value;
+            const currentDistrict = districtFilter.value;
+
+            // Clear old options
+            typeFilter.options.length = 1; // Keep "All Types"
+            statusFilter.options.length = 1; // Keep "All Statuses"
+            districtFilter.options.length = 1; // Keep "All Districts"
+
+            const types = [...new Set(inventory.map(item => item.type))].sort();
+            const statuses = [...new Set(inventory.map(item => item.status))].sort();
+            const districts = [...new Set(inventory.map(item => item.district || "N/A"))].sort();
+
+            types.forEach(type => {
+                typeFilter.add(new Option(type.charAt(0).toUpperCase() + type.slice(1), type));
+            });
+            statuses.forEach(status => {
+                statusFilter.add(new Option(status.replace(/-/g, ' ').toUpperCase(), status));
+            });
+            districts.forEach(district => {
+                districtFilter.add(new Option(district, district));
+            });
+
+            // Restore values
+            typeFilter.value = currentType;
+            statusFilter.value = currentStatus;
+            districtFilter.value = currentDistrict;
+        }
+
         function updateSelectAllCheckboxState() {
             const visibleCheckboxes = inventoryTableBody.querySelectorAll('.item-checkbox');
             if (visibleCheckboxes.length === 0) {
@@ -987,7 +1058,12 @@
         function setupEventListeners() {
             document.getElementById('new-item-btn').addEventListener('click', () => openModal('item-modal'));
             document.getElementById('bulk-upload-btn').addEventListener('click', () => openModal('bulk-upload-modal'));
+            
+            // --- ADDED FILTER LISTENERS ---
             searchBox.addEventListener('keyup', filterInventory);
+            document.getElementById('filter-type').addEventListener('change', filterInventory);
+            document.getElementById('filter-status').addEventListener('change', filterInventory);
+            document.getElementById('filter-district').addEventListener('change', filterInventory);
             
             document.getElementById('logout-btn').addEventListener('click', () => {
                 sessionStorage.removeItem('loggedInUser');
@@ -1270,7 +1346,8 @@
         }
         
         function updateAllViews() {
-            filterInventory();
+            populateTableFilters(); // Re-populate filters
+            filterInventory(); // Then filter the view
             updateStats();
             updateTypeStats();
             updateBulkDeleteButton();
